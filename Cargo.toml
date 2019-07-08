@@ -1,0 +1,11 @@
+[package]
+name = "authd"
+version = "0.1.0"
+authors = ["Karsten Jeschkies <k@jeschkies.xyz>"]
+edition = "2018"
+
+[dependencies]
+jsonwebtoken = "6"
+reqwest = "0.9"
+serde = { version = "1.0", features = ["derive"] }
+
