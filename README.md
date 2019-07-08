@@ -1,0 +1,2 @@
+# authd
+An Authentication Daemon
