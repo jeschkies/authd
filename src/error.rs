@@ -21,7 +21,7 @@
 
 use jsonwebtoken;
 use reqwest;
-use std::{convert, error, fmt, io};
+use std::{convert::From, error, fmt, io};
 
 #[derive(Debug)]
 pub enum Error {
@@ -54,19 +54,19 @@ impl fmt::Display for Error {
     }
 }
 
-impl convert::From<reqwest::Error> for Error {
+impl From<reqwest::Error> for Error {
     fn from(e: reqwest::Error) -> Self {
         Error::Http(e)
     }
 }
 
-impl convert::From<io::Error> for Error {
+impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Error::Io(e)
     }
 }
 
-impl convert::From<jsonwebtoken::errors::Error> for Error {
+impl From<jsonwebtoken::errors::Error> for Error {
     fn from(e: jsonwebtoken::errors::Error) -> Self {
         Error::Jwt(e)
     }
