@@ -39,7 +39,7 @@ impl error::Error for Error {
         match self {
             Error::Http(e) => Some(e),
             Error::Io(e) => Some(e),
-            Error::Jwt(e) => Some(e) ,
+            Error::Jwt(e) => Some(e),
         }
     }
 }
