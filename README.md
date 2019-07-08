@@ -3,8 +3,10 @@
 
 ## Usage
 
-Simply start the daemong with `authd [PRIVATE KEY] [TOKEN LOCATION]`. The program will fetch a new authentication token
+Simply start the daemon with `authd [PRIVATE KEY] [TOKEN LOCATION]`. The program will fetch a new authentication token
 and save it to `TOKEN LOCATION`. Delete the token if you want to force a refresh.
+
+You client should read the toke form the token file and wait if there is no file yet.
 
 ## Options
 
