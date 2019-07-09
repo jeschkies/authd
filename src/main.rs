@@ -82,7 +82,7 @@ fn load_custom_certificate<P: AsRef<Path>>(path: P) -> Result<Certificate, Error
 #[structopt(name = "authd", about = "An authentication daemon.")]
 struct Opt {
 
-    #[structopt(long, default_value = ".ssl/ca-bundle.crt", parse(from_os_str))]
+    #[structopt(long, parse(from_os_str))]
     /// Path to a custom certificate for securing HTTP connections.
     cert: Option<PathBuf>,
 
@@ -104,7 +104,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let opts = Opt::from_args();
     let uri = format!("{}/acs/api/v1/auth/login", opts.endpoint);
-    let cert = load_custom_certificate(opts.cert)?;
 
     let mut client = Client::builder();
 

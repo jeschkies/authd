@@ -10,7 +10,7 @@ You client should read the toke form the token file and wait if there is no file
 
 ## Options
 
-* `--cert` Optional location of a CA certificate file for SSL connections. It defaults to `.ssl/ca-bundle.crt`.
+* `--cert` Optional location of a CA certificate file for SSL connections. Eg on a DC/OS strict cluster it should be `.ssl/ca-bundle.crt`.
 * `--endpoint` The authentication endpoint to use. It defaults to `https://master.mesos`.
 
 The program uses [env_logger](https://github.com/sebasmagri/env_logger). You can set the log level via `RUST_LOG=info`.
