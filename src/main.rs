@@ -106,7 +106,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let uri = format!("{}/acs/api/v1/auth/login", opts.endpoint);
     let cert = load_custom_certificate(opts.cert)?;
 
-    let client = Client::builder().add_root_certificate(cert).build()?;
+    let mut client = Client::builder();
+
+    if let Some(ref p) = opts.cert {
+        let cert = load_custom_certificate(p)?;
+        client = client.add_root_certificate(cert);
+    };
+
+    let client = client.build()?;
 
     // load secret
     let mut secret = Vec::new();
