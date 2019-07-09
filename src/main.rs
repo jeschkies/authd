@@ -2,13 +2,17 @@ mod error;
 
 use crate::error::Error;
 
+use env_logger;
+use log::info;
 use jsonwebtoken::{encode, Algorithm, Header};
 use reqwest::{Certificate, Client, Request};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
+use std::io::prelude::*;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use structopt::StructOpt;
 
 /// A JWT Claim.
 ///
@@ -73,20 +77,53 @@ fn load_custom_certificate<P: AsRef<Path>>(path: P) -> Result<Certificate, Error
     Ok(cert)
 }
 
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "authd", about = "An authentication daemon.")]
+struct Opt {
+
+    #[structopt(long, parse(from_os_str))]
+    /// Path to a custom certificate for securing HTTP connections.
+    cert: Option<PathBuf>,
+
+    #[structopt(long, default_value = "https://master.mesos")]
+    /// Authentication endpoint to use.
+    endpoint: String,
+
+    #[structopt(parse(from_os_str))]
+    /// Path to private RSA key in DER format.
+    private_key: PathBuf,
+
+    #[structopt(parse(from_os_str))]
+    /// Target path for authentication token.
+    token: PathBuf,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let uri = "https://kjeschkie-elasticl-56l539m0xkcm-551146504.us-west-2.elb.amazonaws.com/acs/api/v1/auth/login";
+    env_logger::init();
 
-    let cert = load_custom_certificate("dcos-ca.crt")?;
+    let opts = Opt::from_args();
+    let uri = format!("{}/acs/api/v1/auth/login", opts.endpoint);
 
-    let client = Client::builder().add_root_certificate(cert).build()?;
+    let mut client = Client::builder();
+
+    if let Some(ref p) = opts.cert {
+        let cert = load_custom_certificate(p)?;
+        client = client.add_root_certificate(cert);
+    };
+
+    let client = client.build()?;
 
     // load secret
     let mut secret = Vec::new();
-    File::open("usi.private.der")?.read_to_end(&mut secret)?;
-    let login_request = login_request(&client, uri, &secret)?;
+    File::open(opts.private_key)?.read_to_end(&mut secret)?;
+    let login_request = login_request(&client, &uri, &secret)?;
 
     let body: AuthenticationToken = client.execute(login_request)?.json()?;
 
-    println!("body = {:?}", body);
+    // write token to file
+    File::create(opts.token)?.write_all(body.token.as_bytes())?;
+
+    info!("body = {:?}", body);
     Ok(())
 }
