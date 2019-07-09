@@ -84,7 +84,7 @@ struct Opt {
 
     #[structopt(long, default_value = ".ssl/ca-bundle.crt", parse(from_os_str))]
     /// Path to a custom certificate for securing HTTP connections.
-    cert: PathBuf,
+    cert: Option<PathBuf>,
 
     #[structopt(long, default_value = "https://master.mesos")]
     /// Authentication endpoint to use.
