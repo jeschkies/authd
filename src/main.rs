@@ -2,9 +2,11 @@ mod error;
 
 use crate::error::Error;
 
+use chrono::serde::ts_seconds;
+use chrono::{DateTime, Utc};
 use env_logger;
+use jsonwebtoken::{dangerous_unsafe_decode, encode, Algorithm, Header};
 use log::info;
-use jsonwebtoken::{encode, Algorithm, Header};
 use reqwest::{Certificate, Client, Request};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -30,6 +32,20 @@ struct Claim {
 #[derive(Debug, Deserialize)]
 struct AuthenticationToken {
     token: String,
+}
+
+/// The decoded claim from the authentication token.
+///
+/// * `exp` - The expiration time of the authentication token.
+#[derive(Debug, Deserialize)]
+struct AuthenticationClaim {
+    #[serde(with = "ts_seconds")]
+    exp: DateTime<Utc>,
+}
+
+struct State {
+    token: AuthenticationToken,
+    claim: AuthenticationClaim,
 }
 
 /// The request body to login.
@@ -77,11 +93,9 @@ fn load_custom_certificate<P: AsRef<Path>>(path: P) -> Result<Certificate, Error
     Ok(cert)
 }
 
-
 #[derive(Debug, StructOpt)]
 #[structopt(name = "authd", about = "An authentication daemon.")]
 struct Opt {
-
     #[structopt(long, parse(from_os_str))]
     /// Path to a custom certificate for securing HTTP connections.
     cert: Option<PathBuf>,
@@ -106,24 +120,57 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let uri = format!("{}/acs/api/v1/auth/login", opts.endpoint);
 
     let mut client = Client::builder();
-
     if let Some(ref p) = opts.cert {
         let cert = load_custom_certificate(p)?;
         client = client.add_root_certificate(cert);
     };
-
     let client = client.build()?;
 
     // load secret
     let mut secret = Vec::new();
     File::open(opts.private_key)?.read_to_end(&mut secret)?;
-    let login_request = login_request(&client, &uri, &secret)?;
 
-    let body: AuthenticationToken = client.execute(login_request)?.json()?;
+    let mut state: Option<State> = Option::None;
 
-    // write token to file
-    File::create(opts.token)?.write_all(body.token.as_bytes())?;
+    loop {
+        // Post-mortem: Nullify authentication token if token file was removed
+        // match file_events.try_recv() {
+        //   Ok(Event {event: EventKind(Remove(..), ...}) -> state = None;
+        //   Err(TryRecvError::Empty) -> ignore
+        // }
 
-    info!("body = {:?}", body);
+        // Refresh authentication token if not set.
+        if state.is_none() {
+            let login_request = login_request(&client, &uri, &secret)?;
+
+            let auth_token: AuthenticationToken = client.execute(login_request)?.json()?;
+
+            // write token to file
+            info!("Saving {:?} to {:?}", auth_token, opts.token);
+            File::create(&opts.token)?.write_all(auth_token.token.as_bytes())?;
+
+            let auth_claim =
+                dangerous_unsafe_decode::<AuthenticationClaim>(auth_token.token.as_str())?;
+            info!("claim = {:?}", auth_claim.claims.exp);
+
+            state = Some(State {
+                token: auth_token,
+                claim: auth_claim.claims,
+            });
+        }
+
+        // Pre-mortem: Nullify authentication token and trigger refresh if it expired.
+        if let Some(State {
+            claim: AuthenticationClaim { exp },
+            ..
+        }) = state
+        {
+            if exp < Utc::now() {
+                info!("Authentication token expired.");
+                state = None;
+            }
+        }
+    }
+
     Ok(())
 }
