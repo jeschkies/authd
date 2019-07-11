@@ -5,6 +5,7 @@ authors = ["Karsten Jeschkies <k@jeschkies.xyz>"]
 edition = "2018"
 
 [dependencies]
+chrono = { version = "0.4", features = ["serde"] }
 env_logger = "0.6"
 log = "0.4"
 jsonwebtoken = "6"
