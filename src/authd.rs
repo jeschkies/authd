@@ -62,8 +62,8 @@ impl Authd {
         Ok(())
     }
 
+    /// Pre-mortem: Set a token expiration to trigger a refresh.
     fn set_token_expiration_timer(&mut self) -> Result<(), Error> {
-        // Pre-mortem: Nullify authentication token and trigger refresh if it expired.
         if let Some(ref token) = self.auth_token {
             let AuthenticationClaim { exp } = token.claim()?;
             match (exp - Utc::now()).to_std() {
