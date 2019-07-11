@@ -5,19 +5,18 @@ use crate::client::{AuthenticationClaim, AuthenticationToken, Client};
 use crate::error::Error;
 
 use chrono::Utc;
-use log::info;
+use crossbeam_channel::{after, never, select, Receiver};
+use log::{info, warn};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
-
-struct State {
-    token: AuthenticationToken,
-}
+use std::time::Instant;
 
 pub struct Authd {
     client: Client,
-    state: Option<State>,
+    auth_token: Option<AuthenticationToken>,
     token_path: PathBuf,
+    token_expired: Receiver<Instant>,
 }
 
 impl Authd {
@@ -30,41 +29,54 @@ impl Authd {
         let client = Client::new(endpoint, secret, cert)?;
         Ok(Authd {
             client,
-            state: None,
+            auth_token: None,
             token_path,
+            token_expired: never(),
         })
     }
 
     /// Start the daemon loop.
     pub fn run(mut self) -> Result<(), Error> {
+        // Refresh authentication token at the start.
+        self.refresh_token()?;
+
+        // Refresh authentication token when token file was removed or token expired.
         loop {
-            // Post-mortem: Nullify authentication token if token file was removed
-            // match file_events.try_recv() {
-            //   Ok(Event {event: EventKind(Remove(..), ...}) -> state = None;
-            //   Err(TryRecvError::Empty) -> ignore
-            // }
-
-            // Refresh authentication token if not set.
-            if self.state.is_none() {
-                let auth_token: AuthenticationToken = self.client.login()?;
-
-                // write token to file
-                info!("Saving {:?} to {:?}", auth_token, self.token_path);
-                File::create(&self.token_path)?.write_all(auth_token.token.as_bytes())?;
-
-                info!("claim = {:?}", auth_token.claim()?.exp);
-
-                self.state = Some(State { token: auth_token });
+            select! {
+            //  recv(self.token_file_event) -> event => if is_remove(event) self.refesh_token()?,
+                recv(self.token_expired) -> _instant => self.refresh_token()?,
             }
+        }
+    }
 
-            // Pre-mortem: Nullify authentication token and trigger refresh if it expired.
-            if let Some(State { ref token }) = self.state {
-                let AuthenticationClaim { exp } = token.claim()?;
-                if exp < Utc::now() {
-                    info!("Authentication token expired.");
-                    self.state = None;
+    fn refresh_token(&mut self) -> Result<(), Error> {
+        info!("Refreshing authentication token.");
+        let auth_token: AuthenticationToken = self.client.login()?;
+
+        // write token to file
+        info!("Saving {:?} to {:?}", auth_token, self.token_path);
+        File::create(&self.token_path)?.write_all(auth_token.token.as_bytes())?;
+
+        self.auth_token = Some(auth_token);
+        self.set_token_expiration_timer()?;
+        Ok(())
+    }
+
+    fn set_token_expiration_timer(&mut self) -> Result<(), Error> {
+        // Pre-mortem: Nullify authentication token and trigger refresh if it expired.
+        if let Some(ref token) = self.auth_token {
+            let AuthenticationClaim { exp } = token.claim()?;
+            match (exp - Utc::now()).to_std() {
+                Ok(duration) => {
+                    info!("Set token expiration to {:?}", exp);
+                    self.token_expired = after(duration);
+                }
+                Err(error) => {
+                    warn!("Could not set token expiration: {:?}", error);
+                    self.token_expired = never();
                 }
             }
         }
+        Ok(())
     }
 }
