@@ -118,6 +118,8 @@ struct LoginRequestBody {
     token: String,
 }
 
+// TODO: this is verify similar to AuthenticationClaim. Maybe they should be the same.
+
 /// A JWT Claim.
 ///
 /// * `uid` - The service user id.
