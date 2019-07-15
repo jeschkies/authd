@@ -1,33 +1,16 @@
-//! authd(2)
-//!
-//! 1. Launch a DC/OS strict cluster.
-//! 2. Create key pair:
-//! ```
-//! dcos security org service-accounts keypair usi.private.pem usi.pub.pem
-//! ```
-//! 3. Create user strict-usi:
-//! ```
-//! dcos security org service-accounts create -p usi.pub.pem -d "For testing USI on strict" strict-usi}
-//! ```
-//! 4. Download SSL certs:
-//! ```
-//! wget --no-check-certificate -O dcos-ca.crt "$(dcos config show core.dcos_url)/ca/dcos-ca.crt"
-//! ```
-//! 5. Convert the private key
-//! ```
-//! openssl rsa -in usi.private.pem -outform DER -out usi.private.der
-//! ```
-//! 6. Run with `cargo run`
-
+use crossbeam_channel;
 use jsonwebtoken;
+use notify;
 use reqwest;
 use std::{convert::From, error, fmt, io};
 
 #[derive(Debug)]
 pub enum Error {
+    Crossbeam(crossbeam_channel::RecvError),
     Http(reqwest::Error),
     Io(io::Error),
     Jwt(jsonwebtoken::errors::Error),
+    Notify(notify::Error),
 }
 
 impl error::Error for Error {
@@ -37,9 +20,11 @@ impl error::Error for Error {
 
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
+            Error::Crossbeam(e) => Some(e),
             Error::Http(e) => Some(e),
             Error::Io(e) => Some(e),
             Error::Jwt(e) => Some(e),
+            Error::Notify(e) => Some(e),
         }
     }
 }
@@ -47,10 +32,18 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            Error::Crossbeam(ref s) => write!(f, "Internal message channel error: {}", s),
             Error::Http(ref s) => write!(f, "Http error: {}", s),
             Error::Io(ref s) => write!(f, "IO error: {}", s),
             Error::Jwt(ref s) => write!(f, "JWT generation error: {}", s),
+            Error::Notify(ref s) => write!(f, "Token file notification error: {}", s),
         }
+    }
+}
+
+impl From<crossbeam_channel::RecvError> for Error {
+    fn from(e: crossbeam_channel::RecvError) -> Self {
+        Error::Crossbeam(e)
     }
 }
 
@@ -69,5 +62,11 @@ impl From<io::Error> for Error {
 impl From<jsonwebtoken::errors::Error> for Error {
     fn from(e: jsonwebtoken::errors::Error) -> Self {
         Error::Jwt(e)
+    }
+}
+
+impl From<notify::Error> for Error {
+    fn from(e: notify::Error) -> Self {
+        Error::Notify(e)
     }
 }

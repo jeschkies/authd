@@ -5,12 +5,14 @@ use crate::client::{AuthenticationClaim, AuthenticationToken, Client};
 use crate::error::Error;
 
 use chrono::Utc;
-use crossbeam_channel::{after, never, select, Receiver};
-use log::{info, warn};
+use crossbeam_channel::{after, never, select, unbounded, Receiver};
+use log::{debug, info, warn};
+use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::event::EventKind;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub struct Authd {
     client: Client,
@@ -40,10 +42,14 @@ impl Authd {
         // Refresh authentication token at the start.
         self.refresh_token()?;
 
+        // Watch token file for removal.
+        // We have to keep the watcher around.
+        let (token_file_event, _watcher) = self.subscribe_to_token_file()?;
+
         // Refresh authentication token when token file was removed or token expired.
         loop {
             select! {
-            //  recv(self.token_file_event) -> event => if is_remove(event) self.refesh_token()?,
+                recv(token_file_event) -> event => self.handle_token_file_event(event?)?,
                 recv(self.token_expired) -> _instant => self.refresh_token()?,
             }
         }
@@ -78,5 +84,38 @@ impl Authd {
             }
         }
         Ok(())
+    }
+
+    /// Post-morten: The token file was removed.
+    fn handle_token_file_event(&mut self, event: Result<Event, notify::Error>) -> Result<(), Error> {
+        if self.is_remove(event?) {
+            self.refresh_token()?
+        }
+        Ok(())
+    }
+
+    /// Check whether the token file was removed or some other event happened.
+    fn is_remove(&self, event: Event) -> bool {
+        match event.kind {
+            EventKind::Remove(_) => {
+                info!("Token file {:?} was removed", self.token_path);
+                true
+            }
+            other => {
+                debug!("Other event on token file {:?}: {:?}", self.token_path, other);
+                false
+            }
+        }
+    }
+
+    /// Watch the token file for removal.
+    ///
+    /// The `watcher` is moved out to keep its thread alive.
+    fn subscribe_to_token_file(&self) -> Result<(Receiver<notify::Result<Event>>, RecommendedWatcher), Error> {
+        let (tx, rx) = unbounded();
+
+        let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(2))?;
+        watcher.watch(&self.token_path, RecursiveMode::NonRecursive)?;
+        Ok((rx, watcher))
     }
 }
