@@ -7,8 +7,8 @@ use crate::error::Error;
 use chrono::Utc;
 use crossbeam_channel::{after, never, select, unbounded, Receiver};
 use log::{debug, info, warn};
-use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use notify::event::EventKind;
+use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
@@ -87,7 +87,10 @@ impl Authd {
     }
 
     /// Post-morten: The token file was removed.
-    fn handle_token_file_event(&mut self, event: Result<Event, notify::Error>) -> Result<(), Error> {
+    fn handle_token_file_event(
+        &mut self,
+        event: Result<Event, notify::Error>,
+    ) -> Result<(), Error> {
         if self.is_remove(event?) {
             self.refresh_token()?
         }
@@ -102,7 +105,10 @@ impl Authd {
                 true
             }
             other => {
-                debug!("Other event on token file {:?}: {:?}", self.token_path, other);
+                debug!(
+                    "Other event on token file {:?}: {:?}",
+                    self.token_path, other
+                );
                 false
             }
         }
@@ -111,7 +117,9 @@ impl Authd {
     /// Watch the token file for removal.
     ///
     /// The `watcher` is moved out to keep its thread alive.
-    fn subscribe_to_token_file(&self) -> Result<(Receiver<notify::Result<Event>>, RecommendedWatcher), Error> {
+    fn subscribe_to_token_file(
+        &self,
+    ) -> Result<(Receiver<notify::Result<Event>>, RecommendedWatcher), Error> {
         let (tx, rx) = unbounded();
 
         let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(2))?;
