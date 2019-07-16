@@ -1,3 +1,23 @@
+//! authd(2)
+//!
+//! 1. Launch a DC/OS strict cluster.
+//! 2. Create key pair:
+//! ```
+//! dcos security org service-accounts keypair usi.private.pem usi.pub.pem
+//! ```
+//! 3. Create user strict-usi:
+//! ```
+//! dcos security org service-accounts create -p usi.pub.pem -d "For testing USI on strict" strict-usi}
+//! ```
+//! 4. Download SSL certs:
+//! ```
+//! wget --no-check-certificate -O dcos-ca.crt "$(dcos config show core.dcos_url)/ca/dcos-ca.crt"
+//! ```
+//! 5. Convert the private key
+//! ```
+//! openssl rsa -in usi.private.pem -outform DER -out usi.private.der
+//! ```
+//! 6. Run with `cargo run`
 mod authd;
 mod client;
 mod error;

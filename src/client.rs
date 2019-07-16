@@ -65,6 +65,8 @@ impl Client {
 
     /// Loads a custom certificate for HTTPs calls to DC/OS.
     ///
+    /// # Arguments
+    ///
     /// * `path` - The path of the certification file.
     fn load_custom_certificate<P: AsRef<Path>>(path: P) -> Result<reqwest::Certificate, Error> {
         let mut buf = Vec::new();
@@ -79,6 +81,8 @@ impl Client {
     }
 
     /// Constructs a login request.
+    ///
+    /// # Arguments
     ///
     /// * `client` - The HTTP client used.
     /// * `uri`    - The request URL pointing to the DC/OS login.
@@ -110,6 +114,8 @@ impl Client {
 
 /// The request body to login.
 ///
+/// # Arguments
+///
 /// * `uid`   - The service user id.
 /// * `token` - The service login json web token.
 #[derive(Debug, Serialize)]
@@ -121,6 +127,8 @@ struct LoginRequestBody {
 // TODO: this is verify similar to AuthenticationClaim. Maybe they should be the same.
 
 /// A JWT Claim.
+///
+/// # Arguments
 ///
 /// * `uid` - The service user id.
 /// * `exp` - Unix timestamp when login request token expires.
